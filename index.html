@@ -27,7 +27,7 @@
         <div><label>Or paste CSV roster</label><button class="ghost" onclick="togglePaste()">Paste / Hide CSV Box</button></div>
       </div>
       <div id="pasteBox" class="hidden" style="margin-top:10px"><textarea id="csvText" placeholder="League,Division,Team Name,Coach Name,Jersey #,Player Name,Package,Online Paid,Status,Notes"></textarea><button class="primary" style="margin-top:8px" onclick="loadPastedCSV()">Load Pasted Roster</button></div>
-      <p class="hint">Required headers: League, Division, Team Name, Coach Name, Jersey #, Player Name, Package, Online Paid, Status, Notes</p>
+      <p class="hint" id="autoLoadHint">The app will try to auto-load roster.csv from GitHub first. Manual upload still works as a backup.</p><p class="hint">Required headers: League, Division, Team Name, Coach Name, Jersey #, Player Name, Package, Online Paid, Status, Notes</p>
     </div>
 
     <div class="panel">
@@ -86,13 +86,29 @@ function toggleTeamCard(){showTeam=!showTeam;showEnd=false;renderCard();}
 function nextTeam(){let sel=document.getElementById('teamSelect'); if(sel.options.length<1)return; sel.selectedIndex=Math.min(sel.selectedIndex+1,sel.options.length-1); selectTeam();}
 function prevTeam(){let sel=document.getElementById('teamSelect'); if(sel.options.length<1)return; sel.selectedIndex=Math.max(sel.selectedIndex-1,0); selectTeam();}
 function togglePaste(){document.getElementById('pasteBox').classList.toggle('hidden')}
+
+async function autoLoadRoster(){
+  const hint=document.getElementById('autoLoadHint');
+  try{
+    const res=await fetch('roster.csv?cacheBust='+Date.now(), {cache:'no-store'});
+    if(!res.ok){ if(hint) hint.textContent='No roster.csv found yet. You can upload a CSV manually, or add roster.csv to GitHub for automatic loading.'; restore(); return; }
+    const text=await res.text();
+    if(!text.trim() || !text.toLowerCase().includes('player name')){ if(hint) hint.textContent='roster.csv was found, but it does not look like the roster template. Manual upload still works.'; restore(); return; }
+    loadRows(parseCSV(text));
+    if(hint) hint.textContent='Roster auto-loaded from GitHub roster.csv. Manual upload is still available as a backup.';
+  }catch(e){
+    if(hint) hint.textContent='Auto-load could not run from this location. Manual upload still works.';
+    restore();
+  }
+}
+
 function loadPastedCSV(){loadRows(parseCSV(document.getElementById('csvText').value))}
 document.getElementById('file').addEventListener('change',e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>loadRows(parseCSV(r.result));r.readAsText(f);});
 function addWalkup(){let p={id:Date.now()+'_wu',League:wuLeague.value,Division:wuDivision.value,'Team Name':wuTeam.value,'Coach Name':wuCoach.value,'Jersey #':wuNum.value,'Player Name':wuName.value,Package:wuPackage.value,'Online Paid':wuPaid.value,Status:'Walk-Up',Notes:''};players.push(p);save();populateTeams();}
 function exportCSV(){let rows=[headers, ...players.map(p=>headers.map(h=>p[h]||''))];let blob=new Blob([toCSV(rows)],{type:'text/csv'});let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='LK_Updated_Roster.csv';a.click();}
 function esc(s){return String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
 function escAttr(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-restore();
+autoLoadRoster();
 </script>
 </body>
 </html>
